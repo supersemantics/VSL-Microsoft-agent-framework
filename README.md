@@ -107,6 +107,12 @@ Every `PreNode`/`Invariant` here still requires an `AssuranceBasis`, and it's st
 
 `MAFAdapter` does carry one detectable-case check, the same heuristic `vsl-langgraph`'s `LangGraphAdapter` has: `compile_pre_node`/`compile_invariant` warn (`UserWarning`) if a `monitor`/`rule` claims `F2Modification.FULL` but its source appears to call a hosted model API (`openai`/`anthropic`/`google.genai`/`cohere`/`mistralai`) -- a black-box API call structurally cannot modify the energy function directly, so `FULL` isn't achievable that way; the honest ceiling is `PARTIAL`. This is a heuristic, not proof: it can miss indirect calls, and passing it doesn't confirm a genuine `FULL` claim is correct either.
 
+## Node-level Gamma is not Cluster-level safety
+
+This matters as soon as more than one `Agent` is coordinating, which MAF (like any multi-agent framework) supports: **gating `gamma_threshold` at every tool call does not mean the composed, multi-agent system is safe.** Node-level Gamma is necessary but not sufficient.
+
+`vsl-core`'s own motivating example is the 2010 Flash Crash: every individual participant's Gamma was above 1 -- each one, in isolation, looked sufficiently governed -- and the Cluster-level Gamma was still 0. A `Cluster`'s Gamma is a separate quantity, checked separately, and it can fail even when every constituent `PreNode`/`Invariant` gate is passing cleanly. `vsl_core.cluster.Cluster` isn't MAF-specific -- its `invariants` field holds plain `Invariant` objects, compiled and wired through `MAFAdapter`/`VSLFunctionMiddleware` exactly like any other. If more than one `Agent` is coordinating on a shared outcome, `Cluster`/`ClusterKey` is the construct that addresses this -- not a denser sprinkling of `VSLFunctionMiddleware` instances on individual tool calls.
+
 ## Sample agents
 
 `examples/financial-agents/purchase_approval_agent.py` chains both governance primitives on a real MAF `Agent`:
@@ -114,9 +120,7 @@ Every `PreNode`/`Invariant` here still requires an `AssuranceBasis`, and it's st
 - **PreNode** (`purchase-confidence`): soft, threshold-based confidence gate.
 - **Invariant** (`purchase-hard-cap`): non-bypassable hard cap -- blocked even when confidence is high.
 
-**Part 1** runs entirely without credentials -- it exercises `VSLFunctionMiddleware.process()` directly with a mock context to prove the gate behaviour.
-
-**Part 2** creates a real `Agent` with `FoundryChatClient`. Set env vars and run:
+It creates a real `Agent` with `FoundryChatClient`, so it needs real Azure/Foundry credentials to run. Set env vars and run:
 
 ```bash
 export FOUNDRY_PROJECT_ENDPOINT=https://<your-service>.services.ai.azure.com/api/projects/<your-project>
@@ -124,6 +128,8 @@ export FOUNDRY_MODEL=gpt-4o-mini
 az login
 python examples/financial-agents/purchase_approval_agent.py
 ```
+
+For the credential-free path -- `VSLFunctionMiddleware.process()` exercised directly against a mock context, proving gate behavior without any real agent or API call -- see `tests/test_integration.py`.
 
 ## Layout
 

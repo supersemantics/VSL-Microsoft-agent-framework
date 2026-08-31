@@ -6,27 +6,29 @@ Sample agents organized by domain.
 
 ### `purchase_approval_agent.py`
 
-Chains both VSL governance primitives against a purchase approval flow:
+Chains both VSL governance primitives against a purchase approval flow, wired
+as `VSLFunctionMiddleware` on a Microsoft Agent Framework `Agent`:
 
-- **PreNode** (`purchase-confidence`): soft, threshold-based — the monitor's
+- **PreNode** (`purchase-confidence`): soft, threshold-based -- the monitor's
   confidence signal must clear the robust Gamma threshold before a purchase is
   even considered.
-- **Invariant** (`purchase-hard-cap`): non-bypassable — the amount must never
-  exceed a fixed cap, regardless of how confident the monitor is.
+- **Invariant** (`purchase-hard-cap`): non-bypassable -- the amount must never
+  exceed $1000, regardless of how confident the monitor is.
 
-**Part 1** is LLM-free (no API keys needed) and exercises three scenarios
-against `kernel.invoke()` with both gates wired as `VSLFunctionFilter`s:
+Both gates run in registration order before `approve_purchase` fires; either
+one raising means the tool never runs.
 
-| scenario | amount | confidence | outcome |
-|---|---|---|---|
-| approved | $250 | 5.0 | `APPROVED` |
-| blocked by low confidence | $250 | 0.2 | `AutomationDeniedException` |
-| blocked by hard cap | $5,000 | 5.0 | `InvariantViolation` |
+Needs real Azure/Foundry credentials -- this example creates a real `Agent`
+backed by `FoundryChatClient`, not a mocked one:
 
-**Part 2** shows the identical gate wiring used with a `ChatCompletionAgent`.
-A `ScriptedChatCompletion` mock service drives the agent offline; swap it for
-`AzureChatCompletion()` or `OpenAIChatCompletion()` to use a real service.
-
-```
+```bash
+pip install agent-framework azure-identity pydantic
+export FOUNDRY_PROJECT_ENDPOINT=https://<your-service>.services.ai.azure.com/api/projects/<your-project>
+export FOUNDRY_MODEL=gpt-4o-mini
+az login
 python examples/financial-agents/purchase_approval_agent.py
 ```
+
+For gate behavior exercised without any real agent or API call, see
+`tests/test_integration.py` -- it drives `VSLFunctionMiddleware.process()`
+directly against a mock context.
