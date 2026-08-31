@@ -91,6 +91,22 @@ middleware=[
 
 MAF runs middleware in registration order. If the confidence gate raises, the cap gate and the tool never fire.
 
+## `VSLFunctionMiddleware` doesn't consume `Fallback`
+
+A `PreNode`'s `Fallback` (`on_failure`, `delta_factor`, `max_retries`, `on_max_retries`) is policy data only here -- `MAFAdapter.compile_pre_node`/`compile_invariant` never act on `pre_node.fallback`. On denial, `VSLFunctionMiddleware.process` raises once, immediately; there is no retry loop. `compile_pre_node` warns (`UserWarning`) if a `PreNode`'s `Fallback` is non-default, so this can't be silently assumed -- but the field itself stays inert here, same as `vsl-langgraph`'s `LangGraphAdapter` and `vsl-langchain`'s `LangChainAdapter`. `vsl-core`'s own `PlainPythonReferenceAdapter` doesn't consume `Fallback` either.
+
+## `VSLFunctionMiddleware` doesn't write to the ledger either
+
+Nothing in `process()` calls `VerbaLedger.write*` -- a gate denial becomes a raised exception, and that's it. If you want an audit trail of gate decisions, your own code (e.g. the `try`/`except` around `agent.run()`) has to call `ledger.write_monitor`/`write_verification`/`write` explicitly. An agent with no ledger calls anywhere produces real, working gating and zero audit trail -- this package won't warn you, because from its point of view every gate did exactly what it was compiled to do.
+
+For persisting those writes to a durable, hosted ledger rather than a local file, `VerbaLedger` accepts any `LedgerStore` -- see [`vsl-core-ledger-client`](https://github.com/supersemantics/VSL-Core-ledger-client).
+
+## The F1/F2 assurance distinction -- same caveat as `vsl-core`, `vsl-langgraph`, and `vsl-langchain`
+
+Every `PreNode`/`Invariant` here still requires an `AssuranceBasis`, and it's still **self-declared, not independently verified** -- nothing in this package checks that a stated `F2Modification.FULL` actually matches what a `monitor`/`rule` does. See `vsl-core`'s README ("The F1/F2 assurance distinction") for the full explanation.
+
+`MAFAdapter` does carry one detectable-case check, the same heuristic `vsl-langgraph`'s `LangGraphAdapter` has: `compile_pre_node`/`compile_invariant` warn (`UserWarning`) if a `monitor`/`rule` claims `F2Modification.FULL` but its source appears to call a hosted model API (`openai`/`anthropic`/`google.genai`/`cohere`/`mistralai`) -- a black-box API call structurally cannot modify the energy function directly, so `FULL` isn't achievable that way; the honest ceiling is `PARTIAL`. This is a heuristic, not proof: it can miss indirect calls, and passing it doesn't confirm a genuine `FULL` claim is correct either.
+
 ## Sample agents
 
 `examples/financial-agents/purchase_approval_agent.py` chains both governance primitives on a real MAF `Agent`:
