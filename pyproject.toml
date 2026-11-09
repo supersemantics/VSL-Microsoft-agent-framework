@@ -4,16 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vsl-maf"
-version = "0.1.0"
+version = "0.2.0"
 description = "Microsoft Agent Framework (agent-framework) adapter for VSL (VERBA Specification Language) governance primitives -- implements vsl-core's VSLAdapter conformance contract."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
     # vsl-core (dist name super-semantics-vsl) isn't on PyPI yet --
-    # switch this to a version pin once it's published.
+    # switch this to a version pin once it's published. Needs >= 0.2.0;
+    # vsl_maf checks the installed version on import.
     "super-semantics-vsl @ git+https://github.com/supersemantics/VSL-Core.git",
-    "agent-framework",
+    # Core only: the adapter needs FunctionMiddleware and MiddlewareFailure, not
+    # every model connector. Tested against 1.25.0.
+    "agent-framework-core>=1.25.0",
 ]
 keywords = ["governance", "ai-safety", "guardrails", "agent-framework", "vsl", "verba", "microsoft-agent-framework"]
 classifiers = [
@@ -32,3 +35,4 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

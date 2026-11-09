@@ -48,6 +48,11 @@ _HOSTED_API_MARKERS = (
     "google.generativeai",
     "cohere",
     "mistralai",
+    # MAF's own hosted-model clients (FoundryChatClient, OpenAIChatClient,
+    # AzureOpenAIChatClient, ...) and Azure AI inference: a monitor that asks
+    # another agent or a chat client to judge is a hosted-model call too.
+    "chatclient",
+    "azure.ai.inference",
 )
 
 
@@ -119,6 +124,13 @@ class MAFAdapter:
     middleware hook.
     """
 
+    def __init__(self, *, identity_key: str = "vsl-maf") -> None:
+        """`identity_key` is recorded on every denial this adapter's gates raise;
+        pass the agent's own identity so a denial says which agent it stopped."""
+        if not identity_key:
+            raise ValueError("identity_key must be a non-empty string.")
+        self.identity_key = identity_key
+
     def compile_pre_node(self, pre_node: PreNode) -> CompiledGate:
         if pre_node.fallback != _DEFAULT_FALLBACK:
             warnings.warn(
@@ -131,13 +143,14 @@ class MAFAdapter:
         _warn_if_full_claim_reaches_hosted_api(
             f"PreNode '{pre_node.name}'", pre_node.assurance_basis, pre_node.monitor
         )
+        identity_key = self.identity_key
 
         async def gate(candidate_input: Any) -> None:
             estimate = await pre_node.monitor(candidate_input)
             if not estimate.sufficient(pre_node.gamma_threshold):
                 raise AutomationDeniedException(
                     reason=f"Pre-node '{pre_node.name}' insufficient Gamma",
-                    identity_key="vsl-maf",
+                    identity_key=identity_key,
                 )
 
         return gate
@@ -146,6 +159,7 @@ class MAFAdapter:
         _warn_if_full_claim_reaches_hosted_api(
             f"Invariant '{invariant.name}'", invariant.assurance_basis, invariant.rule
         )
+        identity_key = self.identity_key
 
         async def gate(candidate_input: Any) -> None:
             holds = await invariant.rule(candidate_input)
@@ -158,7 +172,7 @@ class MAFAdapter:
                     reason += f" -- entering terminal state '{terminal_state_name}'"
                 raise InvariantViolation(
                     reason=reason,
-                    identity_key="vsl-maf",
+                    identity_key=identity_key,
                     invariant_name=invariant.name,
                     terminal_state_name=terminal_state_name,
                 )
