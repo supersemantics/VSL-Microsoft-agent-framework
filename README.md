@@ -18,7 +18,7 @@ Is not:
 
 ```bash
 pip install "agent-framework-core>=1.25"
-pip install git+https://github.com/supersemantics/VSL-Core.git
+pip install "super-semantics-vsl @ git+https://github.com/supersemantics/VSL-Core.git@v0.3.0"
 pip install -e .   # from a local clone of this repo
 ```
 
