@@ -4,16 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vsl-maf"
-version = "0.2.0"
+version = "0.2.1"
 description = "Microsoft Agent Framework (agent-framework) adapter for VSL (VERBA Specification Language) governance primitives -- implements vsl-core's VSLAdapter conformance contract."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
-    # vsl-core (dist name super-semantics-vsl) isn't on PyPI yet --
-    # switch this to a version pin once it's published. Needs >= 0.2.0;
-    # vsl_maf checks the installed version on import.
-    "super-semantics-vsl @ git+https://github.com/supersemantics/VSL-Core.git",
+    # vsl-core (dist name super-semantics-vsl) isn't on PyPI yet, so it is
+    # installed from GitHub, pinned to a release tag so an install can't
+    # change under you when vsl-core's main moves. An application that
+    # installs vsl-core itself must name exactly this URL (pip refuses two
+    # different URLs for one package). Switch to a version pin once vsl-core
+    # is on PyPI; PyPI rejects direct-URL dependencies at upload time.
+    # vsl_maf also checks the installed version on import (needs >= 0.2.0).
+    "super-semantics-vsl @ git+https://github.com/supersemantics/VSL-Core.git@v0.3.0",
     # Core only: the adapter needs FunctionMiddleware and MiddlewareFailure, not
     # every model connector. Tested against 1.25.0.
     "agent-framework-core>=1.25.0",
