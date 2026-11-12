@@ -2,7 +2,7 @@
 
 What changed in each release, and why. Newest first.
 
-## 0.2.1 (unreleased): vsl-core pinned to v0.3.0
+## 0.2.1 (2026-11-12, tag `v0.2.1`): vsl-core pinned to v0.3.0
 
 **Before:** vsl-core was installed from `git+https://github.com/supersemantics/VSL-Core.git`
 with no version, so an install took whatever vsl-core's `main` was that day. An application could
