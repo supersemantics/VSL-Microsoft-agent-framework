@@ -17,10 +17,11 @@ Is not:
 ## Install
 
 ```bash
-pip install "agent-framework-core>=1.25"
-pip install "super-semantics-vsl @ git+https://github.com/supersemantics/VSL-Core.git@v0.3.0"
-pip install -e .   # from a local clone of this repo
+pip install vsl-maf
 ```
+
+This installs vsl-core (`super-semantics-vsl`, imported as `vsl_core`) and `agent-framework-core`
+with it. From a local clone of this repo: `pip install -e .`
 
 Add the MAF connector for your model service as well, for example `agent-framework-foundry`.
 
@@ -207,7 +208,7 @@ tests/
 
 Alpha. Conformance-suite green. Tested against agent-framework-core 1.25.0, including end-to-end runs through a real `Agent` and MAF's own function-invocation loop with a scripted chat client: allowed calls, denials aborting the run, `return_to_model`, Invariant denials and recorded gate decisions. The Foundry example has not been run against a live Foundry endpoint.
 
-See [CHANGELOG.md](CHANGELOG.md).
+See [CHANGELOG.md](https://github.com/supersemantics/VSL-Microsoft-agent-framework/blob/HEAD/CHANGELOG.md).
 
 ## License
 
