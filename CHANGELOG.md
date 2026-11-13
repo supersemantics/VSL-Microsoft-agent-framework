@@ -2,7 +2,7 @@
 
 What changed in each release, and why. Newest first.
 
-## 0.2.2: published on PyPI
+## 0.2.2 (2026-11-13, tag `v0.2.2`): published on PyPI
 
 The first version on PyPI: `pip install vsl-maf`, which installs vsl-core (`super-semantics-vsl`)
 with it. The code is unchanged from 0.2.1.
