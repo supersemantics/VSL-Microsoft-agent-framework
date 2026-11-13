@@ -2,6 +2,21 @@
 
 What changed in each release, and why. Newest first.
 
+## 0.2.2: published on PyPI
+
+The first version on PyPI: `pip install vsl-maf`, which installs vsl-core (`super-semantics-vsl`)
+with it. The code is unchanged from 0.2.1.
+
+**Before:** vsl-core came from a GitHub URL pinned to `v0.3.0`, which PyPI does not accept in a
+published package, and an application that also installed vsl-core had to name the same URL.
+
+**After:** vsl-core is a normal dependency, `super-semantics-vsl>=0.3,<0.4`, resolved from PyPI; the
+README gives `pip install vsl-maf`, its links point to GitHub, and the package lists its repository.
+A pushed release tag publishes from GitHub Actions through PyPI Trusted Publishing
+(`.github/workflows/publish.yml`), after the tests pass.
+
+**Why:** installs from a registry, with versions an application can share with its own dependencies.
+
 ## 0.2.1 (2026-11-12, tag `v0.2.1`): vsl-core pinned to v0.3.0
 
 **Before:** vsl-core was installed from `git+https://github.com/supersemantics/VSL-Core.git`
