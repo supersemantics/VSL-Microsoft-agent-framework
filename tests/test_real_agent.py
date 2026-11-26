@@ -25,7 +25,7 @@ from agent_framework import (  # noqa: E402
 from vsl_core.constructs import Invariant, PreNode  # noqa: E402
 from vsl_core.exceptions import InvariantViolation  # noqa: E402
 from vsl_core.ledger import VerbaLedger  # noqa: E402
-from vsl_core.metrics import ROBUST_GAMMA_DEFAULT_THRESHOLD, AssuranceBasis, F2Modification, GammaEstimate  # noqa: E402
+from vsl_core.metrics import ROBUST_GAMMA_DEFAULT_THRESHOLD, GammaEstimate  # noqa: E402
 
 from vsl_maf import MAFAdapter, VSLFunctionMiddleware, VSLGateDenied, tool_arguments  # noqa: E402
 
@@ -77,7 +77,6 @@ def _agent(amount: float, on_denial="abort", ledger: VerbaLedger | None = None):
             name="purchase-within-limit",
             description="Purchases stay comfortably inside the limit.",
             monitor=headroom,
-            assurance_basis=AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.NONE),
         )
     )
     client = ScriptedClient(amount)
@@ -128,6 +127,57 @@ async def test_gate_decisions_are_recorded_by_the_application():
     assert ledger.verify_integrity()
 
 
+@pytest.mark.parametrize("amount, expected_executed", [(250.0, [250.0]), (5000.0, [])])
+async def test_ledger_shows_the_gate_held_before_the_tool(amount, expected_executed):
+    from vsl_core.ledger import Enforcement
+
+    ledger = VerbaLedger()
+    decision_id = f"purchase-{amount}"
+    executed: list[float] = []
+
+    @tool(approval_mode="never_require")
+    def approve_purchase(amount: float) -> str:
+        executed.append(amount)
+        ledger.write_action(identity_key="purchase-agent", action_name="approve_purchase", decision_id=decision_id)
+        return "APPROVED"
+
+    async def headroom(candidate) -> GammaEstimate:
+        value = float(candidate.get("amount", 0.0))
+        estimate = GammaEstimate(gamma_hat=PURCHASE_LIMIT / value if value > 0 else 0.0)
+        ledger.write_gate_decision(identity_key="purchase-agent", primitive_name="purchase-within-limit",
+                                   estimate=estimate, gamma_threshold=ROBUST_GAMMA_DEFAULT_THRESHOLD,
+                                   decision_id=decision_id)
+        return estimate
+
+    gate = MAFAdapter(identity_key="purchase-agent").compile_pre_node(
+        PreNode(name="purchase-within-limit", description="d", monitor=headroom)
+    )
+    agent = Agent(client=ScriptedClient(amount), tools=approve_purchase,
+                  middleware=[VSLFunctionMiddleware(gate, candidate_input_fn=tool_arguments)])
+    if expected_executed:
+        await agent.run("buy")
+    else:
+        with pytest.raises(VSLGateDenied):
+            await agent.run("buy")
+    assert executed == expected_executed
+    assert ledger.enforcement(decision_id) == Enforcement.BEFORE_ACTION
+
+
+def test_compiling_gates_without_a_basis_warns_about_nothing():
+    import warnings
+
+    async def rule(_candidate) -> bool:
+        return True
+
+    async def monitor(_candidate) -> GammaEstimate:
+        return GammaEstimate(gamma_hat=2.0)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        MAFAdapter().compile_invariant(Invariant(name="i", description="d", rule=rule))
+        MAFAdapter().compile_pre_node(PreNode(name="p", description="d", monitor=monitor))
+
+
 async def test_middleware_list_order_is_gate_order_and_the_first_denial_wins():
     """Pins MAF Python's behaviour the README describes (registration order); if a
     release changes it, this test says so. (MAF for .NET runs them the other way.)"""
@@ -142,13 +192,12 @@ async def test_middleware_list_order_is_gate_order_and_the_first_denial_wins():
     async def under_cap(candidate) -> bool:
         return float(candidate.get("amount", 0.0)) <= PURCHASE_LIMIT
 
-    basis = AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.NONE)
-    cap = MAFAdapter().compile_invariant(Invariant(name="cap", description="d", rule=under_cap, assurance_basis=basis))
+    cap = MAFAdapter().compile_invariant(Invariant(name="cap", description="d", rule=under_cap))
 
     async def always_passes(_candidate) -> bool:
         return True
 
-    other = MAFAdapter().compile_invariant(Invariant(name="other", description="d", rule=always_passes, assurance_basis=basis))
+    other = MAFAdapter().compile_invariant(Invariant(name="other", description="d", rule=always_passes))
 
     @tool(approval_mode="never_require")
     def approve_purchase(amount: float) -> str:
@@ -175,8 +224,7 @@ async def test_invariant_denial_reaches_the_caller_as_its_specific_type():
         return float(candidate.get("amount", 0.0)) <= PURCHASE_LIMIT
 
     gate = MAFAdapter().compile_invariant(
-        Invariant(name="purchase-hard-cap", description="Never above the cap.", rule=under_cap,
-                  assurance_basis=AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.NONE))
+        Invariant(name="purchase-hard-cap", description="Never above the cap.", rule=under_cap)
     )
     agent = Agent(client=ScriptedClient(5000.0), tools=approve_purchase,
                   middleware=[VSLFunctionMiddleware(gate, candidate_input_fn=tool_arguments)])

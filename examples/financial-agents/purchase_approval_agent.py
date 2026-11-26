@@ -9,9 +9,8 @@ before the tool runs:
   remaining daily budget. Its monitor returns budget / amount, a ratio where
   1.0 is break-even, and records every decision with write_gate_decision().
 
-Neither gate involves a model at the guarded call, so both are F1 = True,
-F2 = NONE (assurance level LOW): they block every purchase they deny, but they
-do not shape what the model produces. Report the two separately.
+Both gates run before approve_purchase, and the tool records itself with
+write_action(), so ledger.enforcement(decision_id) shows whether they held.
 
 A denial aborts the run (VSLGateDenied), so this code sees it, and the model is
 never handed a tool error to talk its way around.
@@ -43,7 +42,7 @@ from agent_framework.foundry import FoundryChatClient
 from vsl_core.constructs import Invariant, PreNode
 from vsl_core.exceptions import InvariantViolation
 from vsl_core.ledger import JsonlLedgerStore, LedgerEntryType, VerbaLedger
-from vsl_core.metrics import ROBUST_GAMMA_DEFAULT_THRESHOLD, AssuranceBasis, F2Modification, GammaEstimate
+from vsl_core.metrics import ROBUST_GAMMA_DEFAULT_THRESHOLD, GammaEstimate
 
 from vsl_maf import MAFAdapter, VSLFunctionMiddleware, VSLGateDenied, tool_arguments
 
@@ -52,9 +51,6 @@ HARD_CAP = 1000.0
 DAILY_BUDGET_REMAINING = 500.0
 BUDGET_GATE = "purchase-within-budget"
 CAP_GATE = "purchase-hard-cap"
-
-# No model at either guarded call: the gates only allow or block.
-NO_MODEL_SHAPING = AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.NONE)
 
 ledger = VerbaLedger(JsonlLedgerStore("purchase-ledger.jsonl", fsync=True))
 current_decision: dict[str, str] = {}
@@ -67,7 +63,9 @@ def approve_purchase(
     vendor: Annotated[str, Field(description="Vendor name")],
 ) -> str:
     """Approve a purchase transaction."""
-    return f"APPROVED: ${amount:.2f} from {vendor}"
+    result = f"APPROVED: ${amount:.2f} from {vendor}"
+    ledger.write_action(identity_key=AGENT_ID, action_name="approve_purchase", decision_id=current_decision["id"])
+    return result
 
 
 async def budget_headroom(candidate: dict[str, Any]) -> GammaEstimate:
@@ -98,13 +96,11 @@ async def main() -> None:
         name=CAP_GATE,
         description=f"Amount must never exceed ${HARD_CAP:.0f}.",
         rule=under_hard_cap,
-        assurance_basis=NO_MODEL_SHAPING,
     ))
     budget_gate = adapter.compile_pre_node(PreNode(
         name=BUDGET_GATE,
         description="A purchase must leave headroom in the remaining daily budget.",
         monitor=budget_headroom,
-        assurance_basis=NO_MODEL_SHAPING,
         gamma_threshold=ROBUST_GAMMA_DEFAULT_THRESHOLD,
     ))
 
@@ -147,6 +143,7 @@ async def main() -> None:
                     decision_id=current_decision["id"],
                     payload={"escalated_to": "finance-approvers", "reason": denied.denial.reason},
                 )
+            print(f"  Enforcement: {ledger.enforcement(current_decision['id']).value}")
 
     print("\nLedger intact:", ledger.verify_integrity())
 
