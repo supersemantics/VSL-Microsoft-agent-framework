@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from vsl_core.constructs import Invariant, PreNode
 from vsl_core.exceptions import AutomationDeniedException, InvariantViolation
-from vsl_core.metrics import AssuranceBasis, F2Modification, GammaEstimate
+from vsl_core.metrics import GammaEstimate
 
 from vsl_maf import MAFAdapter, VSLFunctionMiddleware, VSLGateDenied, tool_arguments
 from vsl_maf.integration import _FAILURE_BASE
@@ -32,8 +32,6 @@ class _MockContext:
         self.metadata: dict = {}
 
 
-# No model at the guarded call in these synthetic gates: F1 = True, F2 = NONE.
-_BASIS = AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.NONE)
 _adapter = MAFAdapter()
 
 
@@ -54,11 +52,11 @@ async def _failing_rule(_: object) -> bool:
 
 
 def _make_pre_node(monitor) -> PreNode:
-    return PreNode(name="test-pre-node", description="test", monitor=monitor, assurance_basis=_BASIS, gamma_threshold=1.1)
+    return PreNode(name="test-pre-node", description="test", monitor=monitor, gamma_threshold=1.1)
 
 
 def _make_invariant(rule) -> Invariant:
-    return Invariant(name="test-invariant", description="test", rule=rule, assurance_basis=_BASIS)
+    return Invariant(name="test-invariant", description="test", rule=rule)
 
 
 class _Counter:
@@ -205,19 +203,3 @@ async def test_denials_carry_the_configured_identity():
     with pytest.raises(ValueError):
         MAFAdapter(identity_key="")
 
-
-async def _judge_with_a_maf_chat_client(candidate):  # never awaited: only its source is inspected
-    from agent_framework.foundry import FoundryChatClient  # noqa: F401
-
-    return GammaEstimate(gamma_hat=0.0)
-
-
-def test_full_claim_on_a_maf_chat_client_judge_warns():
-    pre_node = PreNode(
-        name="judge",
-        description="LLM judge",
-        monitor=_judge_with_a_maf_chat_client,
-        assurance_basis=AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.FULL),
-    )
-    with pytest.warns(UserWarning, match="hosted model API"):
-        MAFAdapter().compile_pre_node(pre_node)

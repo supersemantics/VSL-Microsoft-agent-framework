@@ -18,9 +18,8 @@ Both gates run in registration order before `approve_purchase`. A denial aborts
 the run with `VSLGateDenied`, so the example's own code sees it. Every gate
 decision is recorded with `write_gate_decision()` in a JSONL ledger.
 
-Neither gate involves a model at the guarded call, so both are F1 = True,
-F2 = `NONE` (level LOW): they block what they deny, but they do not shape what
-the model produces.
+The tool records itself with `write_action()`, so `ledger.enforcement(decision_id)`
+shows whether both gates held before it ran.
 
 Needs real Azure/Foundry credentials, because the example creates a real `Agent`
 backed by `FoundryChatClient`:

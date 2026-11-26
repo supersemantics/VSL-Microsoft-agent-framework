@@ -2,7 +2,7 @@
 
 A [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/overview/) (`agent-framework`) adapter for [vsl-core](https://github.com/supersemantics/VSL-Core): implements `vsl_core.conformance.protocol.VSLAdapter` and provides `VSLFunctionMiddleware`, a `FunctionMiddleware` subclass that gates every tool call an `Agent` makes before it fires.
 
-Requires vsl-core 0.2.0 or later and agent-framework-core 1.25 or later. Handover records (below) need vsl-core 0.3.0.
+Requires vsl-core 0.4.0 or later and agent-framework-core 1.25 or later.
 
 Is:
 
@@ -37,7 +37,7 @@ from pydantic import Field
 
 from vsl_core.constructs import PreNode
 from vsl_core.ledger import VerbaLedger
-from vsl_core.metrics import ROBUST_GAMMA_DEFAULT_THRESHOLD, AssuranceBasis, F2Modification, GammaEstimate
+from vsl_core.metrics import ROBUST_GAMMA_DEFAULT_THRESHOLD, GammaEstimate
 from vsl_maf import MAFAdapter, VSLFunctionMiddleware, VSLGateDenied, tool_arguments
 
 REFUND_LIMIT = 500.0
@@ -64,8 +64,6 @@ gate = MAFAdapter(identity_key="refund-agent").compile_pre_node(PreNode(
     name=REFUND_GATE,
     description="Refunds must stay comfortably inside the policy limit.",
     monitor=refund_headroom,
-    # No model at the guarded call: the gate only allows or blocks.
-    assurance_basis=AssuranceBasis(f1_pre_commitment=True, f2_modification=F2Modification.NONE),
     gamma_threshold=ROBUST_GAMMA_DEFAULT_THRESHOLD,
 ))
 
@@ -142,6 +140,12 @@ Nothing in this package writes to a `VerbaLedger`. That is the application's cho
 
 A denied gate's record flags drift, so follow it with the decision's next entry (`PRE_NODE`, then `VERIFICATION`, or `TERMINAL`) from your `except VSLGateDenied` block, as `examples/financial-agents/purchase_approval_agent.py` does. An agent with no ledger calls produces working gates and no audit trail, and this package won't warn you.
 
+To show whether each gate held before its tool, also record the tool call with `write_action()` (vsl-core 0.4.0), from the tool's body, under the same `decision_id`. `ledger.enforcement(decision_id)` then returns `BEFORE_ACTION`, `AFTER_ACTION` or `NOT_OBSERVED`, computed from the order of the records:
+
+```python
+ledger.write_action(identity_key="refund-agent", action_name="issue_refund", decision_id=decision_id)
+```
+
 `VerbaLedger` accepts any `LedgerStore`: `JsonlLedgerStore` for a local append-only file, or the optional immudb store in vsl-core.
 
 ## Multi-agent workflows: handovers and Cluster Gamma
@@ -172,19 +176,9 @@ When the sub-agent is called as a tool, the calling agent's `VSLFunctionMiddlewa
 
 Gating every tool call does not make the composed system safe. vsl-core's motivating example is the 2010 Flash Crash: every participant's Gamma was above 1, and the Cluster-level Gamma was still 0. If several agents coordinate on one outcome, declare them as a `vsl_core.cluster.Cluster` and pass its `cluster_key` on their records. The Cluster's `invariants` are plain `Invariant` objects, compiled and wired through `MAFAdapter`/`VSLFunctionMiddleware` like any other.
 
-## The F1/F2 assurance distinction
+## What a gate reports
 
-Every `PreNode`/`Invariant` requires an `AssuranceBasis`. F2 is judged at the call the gate guards and is never earned by the gate itself:
-
-| Gate | F1 | F2 | Level |
-|---|---|---|---|
-| Amount cap or budget check before a tool (no model at the call) | True | `NONE` | LOW |
-| Gate before a hosted-model call whose system prompt the application writes | True | `PARTIAL` | MEDIUM |
-| Gate before a self-hosted model where the application steers logits or activations | True | `FULL` | HIGH |
-
-The level measures influence on the model, not enforcement: a LOW gate still blocks every tool call it denies. Report "blocks before the action: yes" separately rather than raising F2.
-
-The basis is self-declared, not verified. `MAFAdapter` carries one heuristic check: `compile_pre_node`/`compile_invariant` warn (`UserWarning`) when a monitor or rule claims `F2Modification.FULL` but its source appears to call a hosted model API (`openai`, `anthropic`, `google.genai`, `cohere`, `mistralai`, Azure AI inference, or a MAF chat client such as `FoundryChatClient`). A hosted, black-box call cannot modify the energy function, so the honest ceiling is `PARTIAL`. The check can miss indirect calls, and passing it doesn't confirm a `FULL` claim.
+Gates take no assurance claim: build a `PreNode` or `Invariant` from its name, description and monitor or rule. Whether a gate ran before its tool is computed from the ledger, not declared (see [vsl-core's "What a gate reports"](https://github.com/supersemantics/VSL-Core#what-a-gate-reports)). Code written for vsl-maf 0.2 that still passes `assurance_basis` gets a `FutureWarning` from vsl-core; delete the argument.
 
 ## Sample agents
 

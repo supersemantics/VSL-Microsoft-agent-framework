@@ -2,6 +2,24 @@
 
 What changed in each release, and why. Newest first.
 
+## 0.3.0 (unreleased): vsl-core 0.4, no F2 claims
+
+**Before:** vsl-maf required vsl-core `>=0.3,<0.4`. Every example and test passed
+`assurance_basis=AssuranceBasis(...)`, and `MAFAdapter` scanned a monitor's or rule's source to
+warn when it claimed `F2Modification.FULL` while calling a hosted model API.
+
+**After:** vsl-maf requires vsl-core `>=0.4,<0.5` (checked again on import). Gates are built from
+a name, description and monitor or rule, with no assurance claim. The FULL-claim heuristic is
+gone: vsl-core 0.4 takes no F2 value, so there is nothing to check. The README, the purchase
+approval example and the tests no longer pass `assurance_basis`. The example's tool records itself
+with `write_action()` and prints `ledger.enforcement(decision_id)` for each request, and a new
+test runs a real MAF `Agent` and checks the ledger reads `BEFORE_ACTION` for an allowed and a
+denied purchase.
+
+**Why:** vsl-core 0.4.0 computes whether a gate held before its action from the ledger instead of
+taking a declared level. Code still passing `assurance_basis` keeps working, with a
+`FutureWarning` from vsl-core.
+
 ## 0.2.2 (2026-11-13, tag `v0.2.2`): published on PyPI
 
 The first version on PyPI: `pip install vsl-maf`, which installs vsl-core (`super-semantics-vsl`)
